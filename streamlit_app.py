@@ -7,6 +7,7 @@ import pandas as pd
 from pypdf import PdfReader
 from docx import Document
 from google import genai
+from google.genai import types
 
 
 # =========================================================
@@ -19,7 +20,7 @@ st.set_page_config(
 )
 
 st.title("🤖 CHATBOT TRA CỨU TÀI LIỆU IC PXVH1")
-st.caption("Tra cứu tài liệu PDF, Word, Excel từ Google Drive")
+st.caption("Tra cứu PDF, Word, Excel và hình ảnh từ Google Drive")
 
 
 # =========================================================
@@ -29,12 +30,13 @@ DRIVE_FOLDER_ID = "1P44hHly9bSdVZps4oqIgeReclxQWCzIm"
 
 
 # =========================================================
-# GEMINI
+# GEMINI API
 # =========================================================
 try:
     client = genai.Client(
         api_key=st.secrets["GEMINI_API_KEY"]
     )
+
 except Exception as e:
     st.error(f"Lỗi Gemini API Key: {e}")
     st.stop()
@@ -52,9 +54,11 @@ def read_pdf(path):
     for i, page in enumerate(reader.pages):
 
         try:
+
             page_text = page.extract_text() or ""
 
             if page_text.strip():
+
                 text += f"\n\n===== TRANG {i + 1} =====\n"
                 text += page_text
 
@@ -73,10 +77,13 @@ def read_docx(path):
 
     doc = Document(path)
 
+    # Đọc đoạn văn
     for paragraph in doc.paragraphs:
 
         if paragraph.text.strip():
+
             text += paragraph.text + "\n"
+
 
     # Đọc bảng
     for table_index, table in enumerate(doc.tables):
@@ -88,7 +95,10 @@ def read_docx(path):
             values = []
 
             for cell in row.cells:
-                values.append(cell.text.strip())
+
+                values.append(
+                    cell.text.strip()
+                )
 
             text += " | ".join(values) + "\n"
 
@@ -107,6 +117,7 @@ def read_excel(path):
     for sheet_name in excel_file.sheet_names:
 
         try:
+
             df = pd.read_excel(
                 path,
                 sheet_name=sheet_name,
@@ -115,7 +126,10 @@ def read_excel(path):
 
             df = df.fillna("")
 
-            text += f"\n\n===== SHEET: {sheet_name} =====\n"
+            text += (
+                f"\n\n"
+                f"===== SHEET: {sheet_name} =====\n"
+            )
 
             for index, row in df.iterrows():
 
@@ -126,9 +140,12 @@ def read_excel(path):
                     value_text = str(value).strip()
 
                     if value_text:
+
                         values.append(value_text)
 
+
                 if values:
+
                     text += (
                         f"Dòng {index + 1}: "
                         + " | ".join(values)
@@ -138,7 +155,7 @@ def read_excel(path):
         except Exception as e:
 
             text += (
-                f"\nKhông đọc được sheet "
+                f"\nKhông đọc được Sheet "
                 f"{sheet_name}: {e}\n"
             )
 
@@ -146,7 +163,7 @@ def read_excel(path):
 
 
 # =========================================================
-# ĐỌC TXT / CSV
+# TXT / CSV
 # =========================================================
 def read_text_file(path):
 
@@ -162,26 +179,31 @@ def read_text_file(path):
             return f.read()
 
     except Exception:
+
         return ""
 
 
 # =========================================================
-# ĐỌC FILE
+# NHẬN DIỆN FILE
 # =========================================================
 def read_file(path):
 
     extension = os.path.splitext(path)[1].lower()
 
     if extension == ".pdf":
+
         return read_pdf(path)
 
     elif extension == ".docx":
+
         return read_docx(path)
 
     elif extension in [".xlsx", ".xls"]:
+
         return read_excel(path)
 
     elif extension in [".txt", ".csv"]:
+
         return read_text_file(path)
 
     return ""
@@ -246,6 +268,7 @@ def load_documents():
                 ".txt",
                 ".csv"
             ]:
+
                 continue
 
 
@@ -268,7 +291,6 @@ def load_documents():
                     f"Không đọc được file "
                     f"{filename}: {e}"
                 )
-
 
     return documents
 
@@ -323,6 +345,57 @@ with st.expander(
 
 
 # =========================================================
+# PHẦN HÌNH ẢNH
+# =========================================================
+st.divider()
+
+st.subheader("📷 Tra cứu bằng hình ảnh")
+
+col1, col2 = st.columns(2)
+
+
+with col1:
+
+    uploaded_image = st.file_uploader(
+        "🖼️ Chọn ảnh từ máy",
+        type=[
+            "jpg",
+            "jpeg",
+            "png",
+            "webp"
+        ]
+    )
+
+
+with col2:
+
+    camera_image = st.camera_input(
+        "📷 Hoặc chụp ảnh trực tiếp"
+    )
+
+
+# Ưu tiên ảnh chụp nếu có
+image_file = None
+
+if camera_image is not None:
+
+    image_file = camera_image
+
+elif uploaded_image is not None:
+
+    image_file = uploaded_image
+
+
+if image_file is not None:
+
+    st.image(
+        image_file,
+        caption="Ảnh dùng để tra cứu",
+        width=500
+    )
+
+
+# =========================================================
 # LỊCH SỬ CHAT
 # =========================================================
 if "messages" not in st.session_state:
@@ -342,7 +415,7 @@ for message in st.session_state.messages:
 
 
 # =========================================================
-# Ô NHẬP CÂU HỎI
+# Ô CHAT
 # =========================================================
 question = st.chat_input(
     "Nhập nội dung cần tra cứu..."
@@ -365,7 +438,7 @@ if question:
 
 
     # =====================================================
-    # TẠO CONTEXT
+    # TẠO CONTEXT TÀI LIỆU
     # =====================================================
     context_parts = []
 
@@ -375,7 +448,7 @@ if question:
         document_text = doc["text"]
 
 
-        # Giới hạn mỗi file để tránh prompt quá lớn
+        # Giới hạn mỗi file
         if len(document_text) > 40000:
 
             document_text = document_text[:40000]
@@ -403,26 +476,61 @@ TÊN FILE: {doc["file"]}
     prompt = f"""
 Bạn là CHATBOT TRA CỨU TÀI LIỆU IC PXVH1.
 
-Nhiệm vụ:
-Tra cứu thông tin trong các tài liệu
-PDF, Word và Excel được cung cấp bên dưới.
+Bạn có nhiệm vụ hỗ trợ tra cứu tài liệu kỹ thuật
+và phân tích hình ảnh do người dùng cung cấp.
+
+Hình ảnh có thể là:
+
+- màn hình DCS/HMI;
+- bảng liên động;
+- sơ đồ kỹ thuật;
+- nameplate thiết bị;
+- mã TAG thiết bị;
+- bảng thông số;
+- trang tài liệu;
+- hình chụp thiết bị;
+- hình chụp lỗi hoặc alarm.
 
 QUY TẮC:
 
-1. Chỉ trả lời dựa trên nội dung tài liệu.
-2. Không tự bịa hoặc tự suy diễn.
-3. Nếu không tìm thấy nội dung, trả lời:
-   "Không tìm thấy nội dung này trong tài liệu hiện có."
-4. Trả lời rõ ràng, ngắn gọn, đúng thuật ngữ kỹ thuật.
-5. Nếu có nhiều kết quả, trình bày theo từng ý.
-6. Cuối câu trả lời phải ghi nguồn tài liệu.
-7. Nếu là PDF, ghi số trang nếu xác định được.
-8. Nếu là Excel, ghi tên file và Sheet nếu xác định được.
-9. Có thể tra cứu thông số, tín hiệu, liên động,
-   điều kiện bảo vệ, setpoint và mô tả kỹ thuật.
-10. Không dùng kiến thức bên ngoài để thay thế nội dung tài liệu.
+1. Nếu có hình ảnh, hãy đọc kỹ chữ, mã TAG,
+   thông số và nội dung kỹ thuật trong ảnh.
 
-CÂU HỎI:
+2. Sau đó đối chiếu nội dung trong ảnh với
+   tài liệu được cung cấp bên dưới.
+
+3. Chỉ kết luận dựa trên:
+   - nội dung nhìn thấy trong ảnh;
+   - tài liệu được cung cấp.
+
+4. Không tự bịa thông tin.
+
+5. Nếu không tìm thấy trong tài liệu, trả lời:
+   "Không tìm thấy nội dung này trong tài liệu hiện có."
+
+6. Nếu người dùng gửi mã TAG,
+   hãy ưu tiên tìm chính xác mã TAG đó.
+
+7. Nếu tìm thấy nhiều vị trí,
+   hãy liệt kê đầy đủ các kết quả liên quan.
+
+8. Với PDF:
+   ghi tên file và số trang nếu xác định được.
+
+9. Với Excel:
+   ghi tên file và Sheet nếu xác định được.
+
+10. Trả lời bằng tiếng Việt,
+    rõ ràng và đúng thuật ngữ kỹ thuật.
+
+11. Cuối câu trả lời ghi:
+
+Nguồn:
+- Tên tài liệu
+- Trang hoặc Sheet nếu có.
+
+
+CÂU HỎI CỦA NGƯỜI DÙNG:
 
 {question}
 
@@ -441,21 +549,53 @@ DỮ LIỆU TÀI LIỆU:
     ):
 
         with st.spinner(
-            "Đang tra cứu..."
+            "Đang phân tích và tra cứu..."
         ):
 
             try:
 
-                response = client.models.generate_content(
-                    model="gemini-3.8-flash",
-                    contents=prompt
-                )
+                # ==========================================
+                # CÓ HÌNH ẢNH
+                # ==========================================
+                if image_file is not None:
+
+                    image_bytes = image_file.getvalue()
+
+                    mime_type = image_file.type
+
+                    image_part = types.Part.from_bytes(
+                        data=image_bytes,
+                        mime_type=mime_type
+                    )
+
+
+                    response = client.models.generate_content(
+                        model="gemini-3.8-flash",
+                        contents=[
+                            prompt,
+                            image_part
+                        ]
+                    )
+
+
+                # ==========================================
+                # KHÔNG CÓ HÌNH
+                # ==========================================
+                else:
+
+                    response = client.models.generate_content(
+                        model="gemini-3.8-flash",
+                        contents=prompt
+                    )
+
 
                 answer = response.text
+
 
                 st.markdown(
                     answer
                 )
+
 
                 st.session_state.messages.append(
                     {
@@ -463,6 +603,7 @@ DỮ LIỆU TÀI LIỆU:
                         "content": answer
                     }
                 )
+
 
             except Exception as e:
 
