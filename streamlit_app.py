@@ -23,20 +23,20 @@ st.caption("Tra cứu tài liệu PDF, Word, Excel từ Google Drive")
 
 
 # =========================================================
-# GOOGLE DRIVE
+# GOOGLE DRIVE FOLDER ID
 # =========================================================
 DRIVE_FOLDER_ID = "1P44hHly9bSdVZps4oqIgeReclxQWCzIm"
 
 
 # =========================================================
-# GEMINI
+# KẾT NỐI GEMINI
 # =========================================================
 try:
     client = genai.Client(
         api_key=st.secrets["GEMINI_API_KEY"]
     )
 except Exception as e:
-    st.error(f"Không đọc được Gemini API Key: {e}")
+    st.error(f"Lỗi Gemini API Key: {e}")
     st.stop()
 
 
@@ -44,24 +44,17 @@ except Exception as e:
 # ĐỌC PDF
 # =========================================================
 def read_pdf(path):
-
     text = ""
 
     reader = PdfReader(path)
 
     for i, page in enumerate(reader.pages):
-
         try:
-
             page_text = page.extract_text() or ""
 
             if page_text.strip():
-
-                text += (
-                    f"\n\n"
-                    f"===== TRANG {i + 1} =====\n"
-                    f"{page_text}"
-                )
+                text += f"\n\n===== TRANG {i + 1} =====\n"
+                text += page_text
 
         except Exception:
             pass
@@ -73,28 +66,22 @@ def read_pdf(path):
 # ĐỌC WORD
 # =========================================================
 def read_docx(path):
+    text = ""
 
     doc = Document(path)
 
-    text = ""
-
     for paragraph in doc.paragraphs:
-
         if paragraph.text.strip():
-
             text += paragraph.text + "\n"
 
-    # Đọc thêm bảng trong Word
+    # Đọc bảng trong Word
     for table_index, table in enumerate(doc.tables):
-
         text += f"\n===== BẢNG {table_index + 1} =====\n"
 
         for row in table.rows:
-
             values = []
 
             for cell in row.cells:
-
                 values.append(cell.text.strip())
 
             text += " | ".join(values) + "\n"
@@ -106,15 +93,12 @@ def read_docx(path):
 # ĐỌC EXCEL
 # =========================================================
 def read_excel(path):
-
     text = ""
 
     excel_file = pd.ExcelFile(path)
 
     for sheet_name in excel_file.sheet_names:
-
         try:
-
             df = pd.read_excel(
                 path,
                 sheet_name=sheet_name,
@@ -123,21 +107,18 @@ def read_excel(path):
 
             df = df.fillna("")
 
-            text += (
-                f"\n\n"
-                f"===== SHEET: {sheet_name} =====\n"
-            )
+            text += f"\n\n===== SHEET: {sheet_name} =====\n"
 
             for index, row in df.iterrows():
+                values = []
 
-                values = [
-                    str(value).strip()
-                    for value in row.tolist()
-                    if str(value).strip()
-                ]
+                for value in row.tolist():
+                    value_text = str(value).strip()
+
+                    if value_text:
+                        values.append(value_text)
 
                 if values:
-
                     text += (
                         f"Dòng {index + 1}: "
                         + " | ".join(values)
@@ -145,10 +126,8 @@ def read_excel(path):
                     )
 
         except Exception as e:
-
             text += (
-                f"\nKhông đọc được sheet "
-                f"{sheet_name}: {e}\n"
+                f"\nKhông đọc được sheet {sheet_name}: {e}\n"
             )
 
     return text
@@ -158,51 +137,42 @@ def read_excel(path):
 # ĐỌC TXT / CSV
 # =========================================================
 def read_text_file(path):
-
     try:
-
         with open(
             path,
             "r",
             encoding="utf-8",
             errors="ignore"
         ) as f:
-
             return f.read()
 
     except Exception:
-
         return ""
 
 
 # =========================================================
-# XÁC ĐỊNH LOẠI FILE
+# NHẬN DIỆN LOẠI FILE
 # =========================================================
 def read_file(path):
-
     extension = os.path.splitext(path)[1].lower()
 
     if extension == ".pdf":
-
         return read_pdf(path)
 
     elif extension == ".docx":
-
         return read_docx(path)
 
     elif extension in [".xlsx", ".xls"]:
-
         return read_excel(path)
 
     elif extension in [".txt", ".csv"]:
-
         return read_text_file(path)
 
     return ""
 
 
 # =========================================================
-# TẢI TOÀN BỘ THƯ MỤC GOOGLE DRIVE
+# TẢI FILE TỪ GOOGLE DRIVE
 # =========================================================
 @st.cache_resource
 def load_documents():
@@ -212,30 +182,24 @@ def load_documents():
     temp_dir = tempfile.mkdtemp()
 
     try:
-
         downloaded_files = gdown.download_folder(
             id=DRIVE_FOLDER_ID,
             output=temp_dir,
             quiet=False,
-            use_cookies=False,
-            remaining_ok=True
+            use_cookies=False
         )
 
     except Exception as e:
-
         st.error(
             f"Lỗi tải Google Drive: {e}"
         )
-
         return []
 
 
     if not downloaded_files:
-
         st.error(
             "Google Drive không trả về file nào."
         )
-
         return []
 
 
@@ -265,26 +229,19 @@ def load_documents():
 
 
             try:
-
                 content = read_file(path)
 
-
                 if content.strip():
-
                     documents.append(
                         {
                             "file": filename,
-                            "path": path,
                             "text": content
                         }
                     )
 
-
             except Exception as e:
-
                 st.warning(
-                    f"Không đọc được file "
-                    f"{filename}: {e}"
+                    f"Không đọc được file {filename}: {e}"
                 )
 
 
@@ -297,7 +254,6 @@ def load_documents():
 with st.spinner(
     "Đang đọc tài liệu từ Google Drive..."
 ):
-
     documents = load_documents()
 
 
@@ -305,13 +261,11 @@ with st.spinner(
 # HIỂN THỊ TRẠNG THÁI
 # =========================================================
 if documents:
-
     st.success(
         f"✅ Đã đọc được {len(documents)} tài liệu."
     )
 
 else:
-
     st.error(
         "❌ Chưa đọc được tài liệu từ Google Drive."
     )
@@ -325,16 +279,13 @@ with st.expander(
 ):
 
     if documents:
-
         for doc in documents:
-
             st.write(
                 "•",
                 doc["file"]
             )
 
     else:
-
         st.write(
             "Chưa có tài liệu."
         )
@@ -344,7 +295,6 @@ with st.expander(
 # LỊCH SỬ CHAT
 # =========================================================
 if "messages" not in st.session_state:
-
     st.session_state.messages = []
 
 
@@ -353,7 +303,6 @@ for message in st.session_state.messages:
     with st.chat_message(
         message["role"]
     ):
-
         st.markdown(
             message["content"]
         )
@@ -378,12 +327,11 @@ if question:
 
 
     with st.chat_message("user"):
-
         st.markdown(question)
 
 
     # =====================================================
-    # TẠO CONTEXT
+    # TẠO DỮ LIỆU NGỮ CẢNH
     # =====================================================
     context_parts = []
 
@@ -392,10 +340,8 @@ if question:
 
         document_text = doc["text"]
 
-
-        # tránh prompt quá lớn
+        # Giới hạn mỗi tài liệu
         if len(document_text) > 40000:
-
             document_text = document_text[:40000]
 
 
@@ -421,30 +367,25 @@ TÊN FILE: {doc["file"]}
     prompt = f"""
 Bạn là CHATBOT TRA CỨU TÀI LIỆU IC PXVH1.
 
-Nhiệm vụ của bạn là tra cứu tài liệu kỹ thuật
-PDF, Word và Excel được cung cấp bên dưới.
+Nhiệm vụ:
+Tra cứu thông tin trong các tài liệu PDF, Word, Excel
+được cung cấp bên dưới.
 
-QUY TẮC BẮT BUỘC:
+QUY TẮC:
 
-1. Chỉ sử dụng thông tin có trong tài liệu.
-2. Không tự bịa hoặc tự suy diễn thông tin.
-3. Nếu không tìm thấy thì trả lời:
+1. Chỉ trả lời dựa trên tài liệu được cung cấp.
+2. Không tự bịa thông tin.
+3. Nếu không tìm thấy, trả lời:
    "Không tìm thấy nội dung này trong tài liệu hiện có."
-4. Ưu tiên câu trả lời rõ ràng, ngắn gọn,
-   đúng thuật ngữ kỹ thuật.
-5. Nếu có nhiều nội dung liên quan thì trình bày
-   theo từng ý.
-6. Phải ghi nguồn tài liệu ở cuối câu trả lời.
-7. Với PDF:
-   nếu trong dữ liệu có số trang thì ghi số trang.
-8. Với Excel:
-   ghi tên file và tên Sheet nếu xác định được.
-9. Có thể trích dẫn các thông số, giá trị,
-   liên động và điều kiện kỹ thuật trong tài liệu.
-10. Không sử dụng kiến thức bên ngoài để thay thế
-    nội dung tài liệu.
+4. Trả lời ngắn gọn, rõ ràng, đúng kỹ thuật.
+5. Nếu có nhiều nội dung liên quan thì trình bày theo từng ý.
+6. Cuối câu trả lời phải ghi nguồn tài liệu.
+7. Nếu là PDF, cố gắng ghi số trang.
+8. Nếu là Excel, ghi tên file và tên Sheet nếu xác định được.
+9. Có thể trích xuất thông số, điều kiện, liên động, bảo vệ.
+10. Không sử dụng kiến thức bên ngoài thay thế tài liệu.
 
-CÂU HỎI CỦA NGƯỜI DÙNG:
+CÂU HỎI:
 
 {question}
 
@@ -467,22 +408,16 @@ DỮ LIỆU TÀI LIỆU:
         ):
 
             try:
-
-                response = (
-                    client.models.generate_content(
-                        model="gemini-3.8-flash",
-                        contents=prompt
-                    )
+                response = client.models.generate_content(
+                    model="gemini-2.5-flash",
+                    contents=prompt
                 )
 
-
                 answer = response.text
-
 
                 st.markdown(
                     answer
                 )
-
 
                 st.session_state.messages.append(
                     {
@@ -491,9 +426,7 @@ DỮ LIỆU TÀI LIỆU:
                     }
                 )
 
-
             except Exception as e:
-
                 st.error(
                     f"Lỗi Gemini API: {e}"
                 )
