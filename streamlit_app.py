@@ -23,13 +23,13 @@ st.caption("Tra cứu tài liệu PDF, Word, Excel từ Google Drive")
 
 
 # =========================================================
-# GOOGLE DRIVE FOLDER ID
+# GOOGLE DRIVE
 # =========================================================
 DRIVE_FOLDER_ID = "1P44hHly9bSdVZps4oqIgeReclxQWCzIm"
 
 
 # =========================================================
-# KẾT NỐI GEMINI
+# GEMINI
 # =========================================================
 try:
     client = genai.Client(
@@ -44,11 +44,13 @@ except Exception as e:
 # ĐỌC PDF
 # =========================================================
 def read_pdf(path):
+
     text = ""
 
     reader = PdfReader(path)
 
     for i, page in enumerate(reader.pages):
+
         try:
             page_text = page.extract_text() or ""
 
@@ -66,19 +68,23 @@ def read_pdf(path):
 # ĐỌC WORD
 # =========================================================
 def read_docx(path):
+
     text = ""
 
     doc = Document(path)
 
     for paragraph in doc.paragraphs:
+
         if paragraph.text.strip():
             text += paragraph.text + "\n"
 
-    # Đọc bảng trong Word
+    # Đọc bảng
     for table_index, table in enumerate(doc.tables):
+
         text += f"\n===== BẢNG {table_index + 1} =====\n"
 
         for row in table.rows:
+
             values = []
 
             for cell in row.cells:
@@ -93,11 +99,13 @@ def read_docx(path):
 # ĐỌC EXCEL
 # =========================================================
 def read_excel(path):
+
     text = ""
 
     excel_file = pd.ExcelFile(path)
 
     for sheet_name in excel_file.sheet_names:
+
         try:
             df = pd.read_excel(
                 path,
@@ -110,9 +118,11 @@ def read_excel(path):
             text += f"\n\n===== SHEET: {sheet_name} =====\n"
 
             for index, row in df.iterrows():
+
                 values = []
 
                 for value in row.tolist():
+
                     value_text = str(value).strip()
 
                     if value_text:
@@ -126,8 +136,10 @@ def read_excel(path):
                     )
 
         except Exception as e:
+
             text += (
-                f"\nKhông đọc được sheet {sheet_name}: {e}\n"
+                f"\nKhông đọc được sheet "
+                f"{sheet_name}: {e}\n"
             )
 
     return text
@@ -137,13 +149,16 @@ def read_excel(path):
 # ĐỌC TXT / CSV
 # =========================================================
 def read_text_file(path):
+
     try:
+
         with open(
             path,
             "r",
             encoding="utf-8",
             errors="ignore"
         ) as f:
+
             return f.read()
 
     except Exception:
@@ -151,9 +166,10 @@ def read_text_file(path):
 
 
 # =========================================================
-# NHẬN DIỆN LOẠI FILE
+# ĐỌC FILE
 # =========================================================
 def read_file(path):
+
     extension = os.path.splitext(path)[1].lower()
 
     if extension == ".pdf":
@@ -172,7 +188,7 @@ def read_file(path):
 
 
 # =========================================================
-# TẢI FILE TỪ GOOGLE DRIVE
+# TẢI GOOGLE DRIVE
 # =========================================================
 @st.cache_resource
 def load_documents():
@@ -182,6 +198,7 @@ def load_documents():
     temp_dir = tempfile.mkdtemp()
 
     try:
+
         downloaded_files = gdown.download_folder(
             id=DRIVE_FOLDER_ID,
             output=temp_dir,
@@ -190,16 +207,20 @@ def load_documents():
         )
 
     except Exception as e:
+
         st.error(
             f"Lỗi tải Google Drive: {e}"
         )
+
         return []
 
 
     if not downloaded_files:
+
         st.error(
             "Google Drive không trả về file nào."
         )
+
         return []
 
 
@@ -229,9 +250,11 @@ def load_documents():
 
 
             try:
+
                 content = read_file(path)
 
                 if content.strip():
+
                     documents.append(
                         {
                             "file": filename,
@@ -240,8 +263,10 @@ def load_documents():
                     )
 
             except Exception as e:
+
                 st.warning(
-                    f"Không đọc được file {filename}: {e}"
+                    f"Không đọc được file "
+                    f"{filename}: {e}"
                 )
 
 
@@ -254,38 +279,44 @@ def load_documents():
 with st.spinner(
     "Đang đọc tài liệu từ Google Drive..."
 ):
+
     documents = load_documents()
 
 
 # =========================================================
-# HIỂN THỊ TRẠNG THÁI
+# TRẠNG THÁI
 # =========================================================
 if documents:
+
     st.success(
         f"✅ Đã đọc được {len(documents)} tài liệu."
     )
 
 else:
+
     st.error(
         "❌ Chưa đọc được tài liệu từ Google Drive."
     )
 
 
 # =========================================================
-# DANH SÁCH FILE
+# DANH SÁCH TÀI LIỆU
 # =========================================================
 with st.expander(
     "📁 Danh sách tài liệu đã đọc"
 ):
 
     if documents:
+
         for doc in documents:
+
             st.write(
                 "•",
                 doc["file"]
             )
 
     else:
+
         st.write(
             "Chưa có tài liệu."
         )
@@ -295,6 +326,7 @@ with st.expander(
 # LỊCH SỬ CHAT
 # =========================================================
 if "messages" not in st.session_state:
+
     st.session_state.messages = []
 
 
@@ -303,13 +335,14 @@ for message in st.session_state.messages:
     with st.chat_message(
         message["role"]
     ):
+
         st.markdown(
             message["content"]
         )
 
 
 # =========================================================
-# Ô CHAT
+# Ô NHẬP CÂU HỎI
 # =========================================================
 question = st.chat_input(
     "Nhập nội dung cần tra cứu..."
@@ -327,11 +360,12 @@ if question:
 
 
     with st.chat_message("user"):
+
         st.markdown(question)
 
 
     # =====================================================
-    # TẠO DỮ LIỆU NGỮ CẢNH
+    # TẠO CONTEXT
     # =====================================================
     context_parts = []
 
@@ -340,8 +374,10 @@ if question:
 
         document_text = doc["text"]
 
-        # Giới hạn mỗi tài liệu
+
+        # Giới hạn mỗi file để tránh prompt quá lớn
         if len(document_text) > 40000:
+
             document_text = document_text[:40000]
 
 
@@ -368,22 +404,23 @@ TÊN FILE: {doc["file"]}
 Bạn là CHATBOT TRA CỨU TÀI LIỆU IC PXVH1.
 
 Nhiệm vụ:
-Tra cứu thông tin trong các tài liệu PDF, Word, Excel
-được cung cấp bên dưới.
+Tra cứu thông tin trong các tài liệu
+PDF, Word và Excel được cung cấp bên dưới.
 
 QUY TẮC:
 
-1. Chỉ trả lời dựa trên tài liệu được cung cấp.
-2. Không tự bịa thông tin.
-3. Nếu không tìm thấy, trả lời:
+1. Chỉ trả lời dựa trên nội dung tài liệu.
+2. Không tự bịa hoặc tự suy diễn.
+3. Nếu không tìm thấy nội dung, trả lời:
    "Không tìm thấy nội dung này trong tài liệu hiện có."
-4. Trả lời ngắn gọn, rõ ràng, đúng kỹ thuật.
-5. Nếu có nhiều nội dung liên quan thì trình bày theo từng ý.
+4. Trả lời rõ ràng, ngắn gọn, đúng thuật ngữ kỹ thuật.
+5. Nếu có nhiều kết quả, trình bày theo từng ý.
 6. Cuối câu trả lời phải ghi nguồn tài liệu.
-7. Nếu là PDF, cố gắng ghi số trang.
-8. Nếu là Excel, ghi tên file và tên Sheet nếu xác định được.
-9. Có thể trích xuất thông số, điều kiện, liên động, bảo vệ.
-10. Không sử dụng kiến thức bên ngoài thay thế tài liệu.
+7. Nếu là PDF, ghi số trang nếu xác định được.
+8. Nếu là Excel, ghi tên file và Sheet nếu xác định được.
+9. Có thể tra cứu thông số, tín hiệu, liên động,
+   điều kiện bảo vệ, setpoint và mô tả kỹ thuật.
+10. Không dùng kiến thức bên ngoài để thay thế nội dung tài liệu.
 
 CÂU HỎI:
 
@@ -408,8 +445,9 @@ DỮ LIỆU TÀI LIỆU:
         ):
 
             try:
+
                 response = client.models.generate_content(
-                    model="gemini-2.5-flash",
+                    model="gemini-3.8-flash",
                     contents=prompt
                 )
 
@@ -427,6 +465,7 @@ DỮ LIỆU TÀI LIỆU:
                 )
 
             except Exception as e:
+
                 st.error(
                     f"Lỗi Gemini API: {e}"
                 )
