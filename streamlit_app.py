@@ -175,9 +175,9 @@ def read_file(path):
 
 # =========================================================
 # TẢI GOOGLE DRIVE
-# CACHE 60 GIÂY
+# CACHE GIỮ NGUYÊN ĐẾN KHI BẤM NÚT CẬP NHẬT
 # =========================================================
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(show_spinner=False)
 def load_documents():
     documents = []
 
