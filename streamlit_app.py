@@ -19,7 +19,7 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("🤖 CHATBOT TRA CỨU TÀI LIỆU IC PXVH1")
+st.title("🤖 CHATBOT TRA CỨU RANGE/INTERLOCK IC PXVH1")
 st.caption("Tra cứu PDF, Word, Excel và hình ảnh từ Google Drive")
 
 
