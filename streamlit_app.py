@@ -14,7 +14,7 @@ from google.genai import types
 # CẤU HÌNH APP
 # =========================================================
 st.set_page_config(
-    page_title="CHATBOT TRA CỨU TÀI LIỆU IC PXVH1",
+    page_title="CHATBOT TRA CỨU RANGE/INTERLOCK IC PXVH1",
     page_icon="🤖",
     layout="wide"
 )
