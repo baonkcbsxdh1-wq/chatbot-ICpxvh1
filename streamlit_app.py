@@ -15,7 +15,7 @@ from google.genai import types
 # CẤU HÌNH APP
 # =========================================================
 st.set_page_config(
-    page_title="CHATBOT TRA CỨU TÀI LIỆU IC PXVH1",
+    page_title="CHATBOT TRA CỨU RANGE/VALUE IC PXVH1",
     page_icon="🤖",
     layout="wide"
 )
@@ -31,7 +31,7 @@ DRIVE_FOLDER_ID = "1P44hHly9bSdVZps4oqIgeReclxQWCzIm"
 
 
 # =========================================================
-# GEMINI API
+# GEMINI
 # =========================================================
 try:
     client = genai.Client(
@@ -72,12 +72,10 @@ def read_docx(path):
 
     doc = Document(path)
 
-    # Đọc đoạn văn
     for paragraph in doc.paragraphs:
         if paragraph.text.strip():
             text += paragraph.text + "\n"
 
-    # Đọc bảng
     for table_index, table in enumerate(doc.tables):
         text += f"\n===== BẢNG {table_index + 1} =====\n"
 
@@ -177,8 +175,9 @@ def read_file(path):
 
 # =========================================================
 # TẢI GOOGLE DRIVE
+# CACHE 60 GIÂY
 # =========================================================
-@st.cache_resource
+@st.cache_data(ttl=60, show_spinner=False)
 def load_documents():
     documents = []
 
@@ -193,16 +192,10 @@ def load_documents():
         )
 
     except Exception as e:
-        st.error(
-            f"Lỗi tải Google Drive: {e}"
-        )
-        return []
+        return [], f"Lỗi tải Google Drive: {e}"
 
     if not downloaded_files:
-        st.error(
-            "Google Drive không trả về file nào."
-        )
-        return []
+        return [], "Google Drive không trả về file nào."
 
     for root, dirs, files in os.walk(temp_dir):
 
@@ -237,68 +230,28 @@ def load_documents():
                         }
                     )
 
-            except Exception as e:
-                st.warning(
-                    f"Không đọc được file "
-                    f"{filename}: {e}"
-                )
+            except Exception:
+                pass
 
-    return documents
+    return documents, None
 
 
 # =========================================================
-# TÌM CHÍNH XÁC TAG / TỪ KHÓA
+# NÚT CẬP NHẬT TÀI LIỆU
 # =========================================================
-def find_exact_matches(question, documents):
-    question_clean = question.strip().upper()
+if st.button(
+    "🔄 Cập nhật tài liệu từ Google Drive",
+    use_container_width=False
+):
+    st.cache_data.clear()
 
-    matches = []
+    st.success(
+        "Đã xóa dữ liệu cũ. Đang tải lại tài liệu..."
+    )
 
-    if not question_clean:
-        return matches
+    time.sleep(0.5)
 
-    for doc in documents:
-        text_upper = doc["text"].upper()
-
-        if question_clean in text_upper:
-            matches.append(doc)
-
-    return matches
-
-
-# =========================================================
-# RETRY GEMINI KHI 503
-# =========================================================
-def ask_gemini(contents):
-    last_error = None
-
-    for attempt in range(4):
-        try:
-            response = client.models.generate_content(
-                model="gemini-3.8-flash",
-                contents=contents
-            )
-
-            return response.text
-
-        except Exception as e:
-            last_error = e
-
-            error_text = str(e)
-
-            if (
-                "503" in error_text
-                or "UNAVAILABLE" in error_text
-                or "high demand" in error_text
-            ):
-                wait_time = 3 + attempt * 2
-
-                time.sleep(wait_time)
-                continue
-
-            raise e
-
-    raise last_error
+    st.rerun()
 
 
 # =========================================================
@@ -307,13 +260,16 @@ def ask_gemini(contents):
 with st.spinner(
     "Đang đọc tài liệu từ Google Drive..."
 ):
-    documents = load_documents()
+    documents, drive_error = load_documents()
 
 
 # =========================================================
 # TRẠNG THÁI
 # =========================================================
-if documents:
+if drive_error:
+    st.error(drive_error)
+
+elif documents:
     st.success(
         f"✅ Đã đọc được {len(documents)} tài liệu."
     )
@@ -325,7 +281,7 @@ else:
 
 
 # =========================================================
-# DANH SÁCH TÀI LIỆU
+# DANH SÁCH FILE
 # =========================================================
 with st.expander(
     "📁 Danh sách tài liệu đã đọc"
@@ -370,6 +326,60 @@ if image_file is not None:
 
 
 # =========================================================
+# TÌM CHÍNH XÁC TAG
+# =========================================================
+def find_exact_matches(question, documents):
+    question_clean = question.strip().upper()
+
+    matches = []
+
+    if not question_clean:
+        return matches
+
+    for doc in documents:
+        text_upper = doc["text"].upper()
+
+        if question_clean in text_upper:
+            matches.append(doc)
+
+    return matches
+
+
+# =========================================================
+# RETRY GEMINI KHI 503
+# =========================================================
+def ask_gemini(contents):
+    last_error = None
+
+    for attempt in range(4):
+        try:
+            response = client.models.generate_content(
+                model="gemini-3.8-flash",
+                contents=contents
+            )
+
+            return response.text
+
+        except Exception as e:
+            last_error = e
+
+            error_text = str(e)
+
+            if (
+                "503" in error_text
+                or "UNAVAILABLE" in error_text
+                or "high demand" in error_text
+            ):
+                wait_time = 3 + attempt * 2
+                time.sleep(wait_time)
+                continue
+
+            raise e
+
+    raise last_error
+
+
+# =========================================================
 # LỊCH SỬ CHAT
 # =========================================================
 if "messages" not in st.session_state:
@@ -377,7 +387,6 @@ if "messages" not in st.session_state:
 
 
 for message in st.session_state.messages:
-
     with st.chat_message(
         message["role"]
     ):
@@ -421,7 +430,7 @@ if question:
     # =====================================================
     context_parts = []
 
-    # Ưu tiên tài liệu có khớp chính xác
+
     if exact_matches:
         for doc in exact_matches:
             context_parts.append(
@@ -435,7 +444,7 @@ TÊN FILE: {doc["file"]}
 """
             )
 
-    # Sau đó thêm các tài liệu còn lại
+
     for doc in documents:
 
         if doc not in exact_matches:
@@ -460,63 +469,33 @@ TÊN FILE: {doc["file"]}
     # PROMPT
     # =====================================================
     prompt = f"""
-Bạn là CHATBOT TRA CỨU TÀI LIỆU IC PXVH1.
+Bạn là CHATBOT TRA CỨU RANGE/VALUE IC PXVH1.
 
-Bạn hỗ trợ tra cứu tài liệu kỹ thuật
-PDF, Word, Excel và hình ảnh.
+Nhiệm vụ:
+Tra cứu thông tin trong tài liệu PDF, Word, Excel
+và hình ảnh do người dùng cung cấp.
 
-QUY TẮC BẮT BUỘC:
+QUY TẮC:
 
-1. Chỉ trả lời dựa trên nội dung tài liệu
-   hoặc hình ảnh người dùng cung cấp.
-
-2. Không được tự bịa hoặc tự suy diễn.
-
-3. Nếu người dùng nhập mã TAG như:
-   A0HTG14CP004
-   10HLS11CP401H
-   thì phải ưu tiên tìm chính xác toàn bộ mã TAG.
-
-4. Nếu tìm thấy mã TAG:
-   - ghi đầy đủ thông tin liên quan;
-   - ghi tên file;
-   - ghi Sheet nếu là Excel;
-   - ghi trang nếu là PDF.
-
-5. Nếu một TAG xuất hiện ở nhiều Sheet
-   hoặc nhiều file, phải liệt kê tất cả.
-
-6. Không được nói "không tìm thấy"
-   nếu mã đó thực tế có trong dữ liệu.
-
-7. Nếu không tìm thấy thật sự thì trả lời:
+1. Chỉ trả lời dựa trên tài liệu hoặc hình ảnh.
+2. Không tự bịa thông tin.
+3. Nếu người dùng nhập mã TAG:
+   phải ưu tiên tìm chính xác toàn bộ mã.
+4. Nếu TAG xuất hiện nhiều nơi:
+   phải liệt kê đầy đủ.
+5. Với Excel:
+   ghi rõ tên file và Sheet.
+6. Với PDF:
+   ghi rõ tên file và Trang nếu xác định được.
+7. Nếu không tìm thấy thật sự:
+   trả lời:
    "Không tìm thấy nội dung này trong tài liệu hiện có."
-
-8. Với Excel:
-   chú ý các tiêu đề:
-   ===== SHEET: ... =====
-   và phải xác định đúng Sheet.
-
-9. Với PDF:
-   chú ý:
-   ===== TRANG ... =====
-   và ghi đúng số trang nếu có.
-
-10. Nếu có hình ảnh:
-    - đọc mã TAG;
-    - đọc chữ;
-    - đọc thông số;
-    - đối chiếu với tài liệu.
-
-11. Trả lời bằng tiếng Việt,
-    rõ ràng, ngắn gọn, đúng kỹ thuật.
-
-12. Cuối câu trả lời phải có:
-
-Nguồn:
-- Tên file
-- Sheet hoặc Trang nếu xác định được
-
+8. Nếu có ảnh:
+   đọc TAG, chữ, thông số trên ảnh
+   rồi đối chiếu với tài liệu.
+9. Trả lời bằng tiếng Việt.
+10. Trả lời ngắn gọn, đúng kỹ thuật.
+11. Cuối câu trả lời ghi nguồn.
 
 CÂU HỎI:
 
