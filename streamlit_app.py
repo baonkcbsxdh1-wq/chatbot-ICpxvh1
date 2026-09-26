@@ -37,7 +37,6 @@ try:
     client = genai.Client(
         api_key=st.secrets["GEMINI_API_KEY"]
     )
-
 except Exception as e:
     st.error(f"Lỗi Gemini API Key: {e}")
     st.stop()
@@ -86,9 +85,7 @@ def read_docx(path):
             values = []
 
             for cell in row.cells:
-                values.append(
-                    cell.text.strip()
-                )
+                values.append(cell.text.strip())
 
             text += " | ".join(values) + "\n"
 
@@ -113,10 +110,7 @@ def read_excel(path):
 
             df = df.fillna("")
 
-            text += (
-                f"\n\n"
-                f"===== SHEET: {sheet_name} =====\n"
-            )
+            text += f"\n\n===== SHEET: {sheet_name} =====\n"
 
             for index, row in df.iterrows():
                 values = []
@@ -336,14 +330,12 @@ else:
 with st.expander(
     "📁 Danh sách tài liệu đã đọc"
 ):
-
     if documents:
         for doc in documents:
             st.write(
                 "•",
                 doc["file"]
             )
-
     else:
         st.write(
             "Chưa có tài liệu."
@@ -351,41 +343,23 @@ with st.expander(
 
 
 # =========================================================
-# HÌNH ẢNH
+# UPLOAD HÌNH ẢNH
 # =========================================================
 st.divider()
 
-st.subheader("📷 Tra cứu bằng hình ảnh")
+st.subheader("🖼️ Tra cứu bằng hình ảnh")
 
-col1, col2 = st.columns(2)
+uploaded_image = st.file_uploader(
+    "Chọn ảnh từ máy",
+    type=[
+        "jpg",
+        "jpeg",
+        "png",
+        "webp"
+    ]
+)
 
-
-with col1:
-    uploaded_image = st.file_uploader(
-        "🖼️ Chọn ảnh từ máy",
-        type=[
-            "jpg",
-            "jpeg",
-            "png",
-            "webp"
-        ]
-    )
-
-
-with col2:
-    camera_image = st.camera_input(
-        "📷 Hoặc chụp ảnh trực tiếp"
-    )
-
-
-image_file = None
-
-if camera_image is not None:
-    image_file = camera_image
-
-elif uploaded_image is not None:
-    image_file = uploaded_image
-
+image_file = uploaded_image
 
 if image_file is not None:
     st.image(
@@ -429,7 +403,6 @@ if question:
         }
     )
 
-
     with st.chat_message("user"):
         st.markdown(question)
 
@@ -448,12 +421,9 @@ if question:
     # =====================================================
     context_parts = []
 
-
-    # Nếu có kết quả chính xác, ưu tiên đưa lên đầu
+    # Ưu tiên tài liệu có khớp chính xác
     if exact_matches:
-
         for doc in exact_matches:
-
             context_parts.append(
                 f"""
 ==================================================
@@ -465,8 +435,7 @@ TÊN FILE: {doc["file"]}
 """
             )
 
-
-    # Sau đó thêm toàn bộ tài liệu còn lại
+    # Sau đó thêm các tài liệu còn lại
     for doc in documents:
 
         if doc not in exact_matches:
