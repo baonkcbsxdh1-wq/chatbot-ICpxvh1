@@ -24,9 +24,7 @@ st.set_page_config(
 )
 
 st.title("🤖 CHATBOT TRA CỨU RANGE/VALUE IC PXVH1")
-st.caption(
-    "Tra cứu PDF, Word, Excel và hình ảnh từ Google Drive"
-)
+st.caption("Tra cứu PDF, Word, Excel và hình ảnh từ Google Drive")
 
 
 # =========================================================
@@ -36,56 +34,46 @@ DRIVE_FOLDER_ID = "1P44hHly9bSdVZps4oqIgeReclxQWCzIm"
 
 
 # =========================================================
-# GIỚI HẠN DỮ LIỆU GỬI GEMINI
+# TỐI ƯU QUOTA GEMINI
 # =========================================================
-MAX_RESULTS = 12
-MAX_CHUNK_CHARS = 2500
-MAX_CONTEXT_CHARS = 28000
+MAX_RESULTS = 6
+MAX_CHUNK_CHARS = 1800
+MAX_CONTEXT_CHARS = 12000
 
 
 # =========================================================
-# GEMINI API
+# GEMINI
 # =========================================================
 try:
     client = genai.Client(
         api_key=st.secrets["GEMINI_API_KEY"]
     )
-
 except Exception as e:
     st.error(f"Lỗi Gemini API Key: {e}")
     st.stop()
 
 
 # =========================================================
-# CHUẨN HÓA CHỮ
+# CHUẨN HÓA TEXT
 # =========================================================
 def normalize_text(text):
     text = str(text).lower()
 
-    text = unicodedata.normalize(
-        "NFD",
-        text
-    )
+    text = unicodedata.normalize("NFD", text)
 
     text = "".join(
-        char
-        for char in text
-        if unicodedata.category(char) != "Mn"
+        ch for ch in text
+        if unicodedata.category(ch) != "Mn"
     )
 
     text = text.replace("đ", "d")
-
-    text = re.sub(
-        r"\s+",
-        " ",
-        text
-    )
+    text = re.sub(r"\s+", " ", text)
 
     return text.strip()
 
 
 # =========================================================
-# TÁCH TỪ KHÓA
+# TỪ KHÓA
 # =========================================================
 def get_keywords(question):
     normalized = normalize_text(question)
@@ -119,7 +107,10 @@ def get_keywords(question):
         "tri",
         "thiet",
         "bi",
-        "do"
+        "do",
+        "hay",
+        "liet",
+        "ke"
     }
 
     keywords = []
@@ -128,9 +119,7 @@ def get_keywords(question):
         if len(word) >= 2 and word not in stop_words:
             keywords.append(word)
 
-    return list(
-        dict.fromkeys(keywords)
-    )
+    return list(dict.fromkeys(keywords))
 
 
 # =========================================================
@@ -142,67 +131,42 @@ def extract_possible_tags(text):
         text
     )
 
-    result = []
+    tags = []
 
     for item in candidates:
-        has_letter = bool(
-            re.search(
-                r"[A-Za-z]",
-                item
-            )
-        )
+        if (
+            re.search(r"[A-Za-z]", item)
+            and re.search(r"\d", item)
+        ):
+            tags.append(item.upper())
 
-        has_number = bool(
-            re.search(
-                r"\d",
-                item
-            )
-        )
-
-        if has_letter and has_number:
-            result.append(
-                item.upper()
-            )
-
-    return list(
-        dict.fromkeys(result)
-    )
+    return list(dict.fromkeys(tags))
 
 
 # =========================================================
-# ĐỔI SỐ CỘT EXCEL THÀNH A, B, C...
+# EXCEL COLUMN A/B/C...
 # =========================================================
-def get_excel_column_name(number):
+def excel_column_name(number):
     result = ""
 
     while number:
-        number, remainder = divmod(
-            number - 1,
-            26
-        )
-
-        result = (
-            chr(65 + remainder)
-            + result
-        )
+        number, rem = divmod(number - 1, 26)
+        result = chr(65 + rem) + result
 
     return result
 
 
 # =========================================================
-# ĐỌC PDF
+# PDF
 # =========================================================
 def read_pdf_chunks(path, filename):
     chunks = []
 
     reader = PdfReader(path)
 
-    for page_index, page in enumerate(
-        reader.pages
-    ):
+    for page_index, page in enumerate(reader.pages):
         try:
             text = page.extract_text() or ""
-
         except Exception:
             text = ""
 
@@ -210,9 +174,9 @@ def read_pdf_chunks(path, filename):
             continue
 
         lines = [
-            line.strip()
-            for line in text.splitlines()
-            if line.strip()
+            x.strip()
+            for x in text.splitlines()
+            if x.strip()
         ]
 
         block = []
@@ -220,31 +184,27 @@ def read_pdf_chunks(path, filename):
         for line in lines:
             block.append(line)
 
-            if len("\n".join(block)) >= 1800:
-                chunks.append(
-                    {
-                        "file": filename,
-                        "location": f"Trang {page_index + 1}",
-                        "text": "\n".join(block)
-                    }
-                )
+            if len("\n".join(block)) >= 1600:
+                chunks.append({
+                    "file": filename,
+                    "location": f"Trang {page_index + 1}",
+                    "text": "\n".join(block)
+                })
 
                 block = []
 
         if block:
-            chunks.append(
-                {
-                    "file": filename,
-                    "location": f"Trang {page_index + 1}",
-                    "text": "\n".join(block)
-                }
-            )
+            chunks.append({
+                "file": filename,
+                "location": f"Trang {page_index + 1}",
+                "text": "\n".join(block)
+            })
 
     return chunks
 
 
 # =========================================================
-# ĐỌC WORD
+# WORD
 # =========================================================
 def read_docx_chunks(path, filename):
     chunks = []
@@ -252,7 +212,7 @@ def read_docx_chunks(path, filename):
     doc = Document(path)
 
     block = []
-    block_number = 1
+    block_no = 1
 
     for paragraph in doc.paragraphs:
         text = paragraph.text.strip()
@@ -262,36 +222,25 @@ def read_docx_chunks(path, filename):
 
         block.append(text)
 
-        if len("\n".join(block)) >= 1800:
-            chunks.append(
-                {
-                    "file": filename,
-                    "location": f"Nội dung {block_number}",
-                    "text": "\n".join(block)
-                }
-            )
+        if len("\n".join(block)) >= 1600:
+            chunks.append({
+                "file": filename,
+                "location": f"Nội dung {block_no}",
+                "text": "\n".join(block)
+            })
 
             block = []
-            block_number += 1
+            block_no += 1
 
     if block:
-        chunks.append(
-            {
-                "file": filename,
-                "location": f"Nội dung {block_number}",
-                "text": "\n".join(block)
-            }
-        )
+        chunks.append({
+            "file": filename,
+            "location": f"Nội dung {block_no}",
+            "text": "\n".join(block)
+        })
 
-    # Đọc bảng trong Word
-    for table_index, table in enumerate(
-        doc.tables
-    ):
-        rows = []
-
-        for row_index, row in enumerate(
-            table.rows
-        ):
+    for table_index, table in enumerate(doc.tables):
+        for row_index, row in enumerate(table.rows):
             values = [
                 cell.text.strip()
                 for cell in row.cells
@@ -300,25 +249,20 @@ def read_docx_chunks(path, filename):
             row_text = " | ".join(values)
 
             if row_text.strip():
-                rows.append(
-                    f"Dòng {row_index + 1}: {row_text}"
-                )
-
-        if rows:
-            chunks.append(
-                {
+                chunks.append({
                     "file": filename,
-                    "location": f"Bảng {table_index + 1}",
-                    "text": "\n".join(rows)
-                }
-            )
+                    "location": (
+                        f"Bảng {table_index + 1} | "
+                        f"Dòng {row_index + 1}"
+                    ),
+                    "text": row_text
+                })
 
     return chunks
 
 
 # =========================================================
-# ĐỌC EXCEL
-# MỖI DÒNG = 1 VÙNG DỮ LIỆU
+# EXCEL
 # =========================================================
 def read_excel_chunks(path, filename):
     chunks = []
@@ -341,42 +285,34 @@ def read_excel_chunks(path, filename):
         for row_index, row in df.iterrows():
             values = []
 
-            for col_index, value in enumerate(
-                row.tolist()
-            ):
+            for col_index, value in enumerate(row.tolist()):
                 value_text = str(value).strip()
 
                 if (
                     value_text
                     and value_text.lower() != "nan"
                 ):
-                    column_name = (
-                        get_excel_column_name(
-                            col_index + 1
-                        )
-                    )
+                    col = excel_column_name(col_index + 1)
 
                     values.append(
-                        f"{column_name}={value_text}"
+                        f"{col}={value_text}"
                     )
 
             if values:
-                chunks.append(
-                    {
-                        "file": filename,
-                        "location": (
-                            f"Sheet: {sheet_name} | "
-                            f"Dòng: {row_index + 1}"
-                        ),
-                        "text": " | ".join(values)
-                    }
-                )
+                chunks.append({
+                    "file": filename,
+                    "location": (
+                        f"Sheet: {sheet_name} | "
+                        f"Dòng: {row_index + 1}"
+                    ),
+                    "text": " | ".join(values)
+                })
 
     return chunks
 
 
 # =========================================================
-# ĐỌC TXT / CSV
+# TXT / CSV
 # =========================================================
 def read_text_chunks(path, filename):
     chunks = []
@@ -394,129 +330,72 @@ def read_text_chunks(path, filename):
         return []
 
     lines = [
-        line.strip()
-        for line in text.splitlines()
-        if line.strip()
+        x.strip()
+        for x in text.splitlines()
+        if x.strip()
     ]
 
-    block = []
-    block_number = 1
-
-    for line in lines:
-        block.append(line)
-
-        if len("\n".join(block)) >= 1800:
-            chunks.append(
-                {
-                    "file": filename,
-                    "location": f"Đoạn {block_number}",
-                    "text": "\n".join(block)
-                }
-            )
-
-            block = []
-            block_number += 1
-
-    if block:
-        chunks.append(
-            {
-                "file": filename,
-                "location": f"Đoạn {block_number}",
-                "text": "\n".join(block)
-            }
-        )
+    for index, line in enumerate(lines):
+        chunks.append({
+            "file": filename,
+            "location": f"Dòng {index + 1}",
+            "text": line
+        })
 
     return chunks
 
 
 # =========================================================
-# NHẬN DIỆN LOẠI FILE
+# ĐỌC FILE
 # =========================================================
 def read_file_chunks(path, filename):
-    extension = os.path.splitext(
-        filename
-    )[1].lower()
+    ext = os.path.splitext(filename)[1].lower()
 
-    if extension == ".pdf":
-        return read_pdf_chunks(
-            path,
-            filename
-        )
+    if ext == ".pdf":
+        return read_pdf_chunks(path, filename)
 
-    elif extension == ".docx":
-        return read_docx_chunks(
-            path,
-            filename
-        )
+    if ext == ".docx":
+        return read_docx_chunks(path, filename)
 
-    elif extension in [
-        ".xlsx",
-        ".xls"
-    ]:
-        return read_excel_chunks(
-            path,
-            filename
-        )
+    if ext in [".xlsx", ".xls"]:
+        return read_excel_chunks(path, filename)
 
-    elif extension in [
-        ".txt",
-        ".csv"
-    ]:
-        return read_text_chunks(
-            path,
-            filename
-        )
+    if ext in [".txt", ".csv"]:
+        return read_text_chunks(path, filename)
 
     return []
 
 
 # =========================================================
-# TẢI GOOGLE DRIVE
+# GOOGLE DRIVE
 # KHÔNG TỰ UPDATE
-# CHỈ ĐỔI KHI BẤM NÚT
 # =========================================================
-@st.cache_data(
-    show_spinner=False
-)
+@st.cache_data(show_spinner=False)
 def load_documents():
-    all_chunks = []
+    chunks = []
     files_loaded = []
 
     temp_dir = tempfile.mkdtemp()
 
     try:
-        downloaded_files = (
-            gdown.download_folder(
-                id=DRIVE_FOLDER_ID,
-                output=temp_dir,
-                quiet=True,
-                use_cookies=False
-            )
+        downloaded = gdown.download_folder(
+            id=DRIVE_FOLDER_ID,
+            output=temp_dir,
+            quiet=True,
+            use_cookies=False
         )
 
     except Exception as e:
-        return (
-            [],
-            [],
-            f"Lỗi tải Google Drive: {e}"
-        )
+        return [], [], f"Lỗi tải Google Drive: {e}"
 
-    if not downloaded_files:
-        return (
-            [],
-            [],
-            "Google Drive không trả về file nào."
-        )
+    if not downloaded:
+        return [], [], "Google Drive không trả về file nào."
 
-    for root, dirs, files in os.walk(
-        temp_dir
-    ):
+    for root, dirs, files in os.walk(temp_dir):
         for filename in files:
-            extension = os.path.splitext(
-                filename
-            )[1].lower()
+            ext = os.path.splitext(filename)[1].lower()
 
-            if extension not in [
+            if ext not in [
                 ".pdf",
                 ".docx",
                 ".xlsx",
@@ -526,25 +405,17 @@ def load_documents():
             ]:
                 continue
 
-            path = os.path.join(
-                root,
-                filename
-            )
+            path = os.path.join(root, filename)
 
             try:
-                chunks = read_file_chunks(
+                file_chunks = read_file_chunks(
                     path,
                     filename
                 )
 
-                if chunks:
-                    all_chunks.extend(
-                        chunks
-                    )
-
-                    files_loaded.append(
-                        filename
-                    )
+                if file_chunks:
+                    chunks.extend(file_chunks)
+                    files_loaded.append(filename)
 
             except Exception:
                 pass
@@ -553,15 +424,11 @@ def load_documents():
         dict.fromkeys(files_loaded)
     )
 
-    return (
-        all_chunks,
-        files_loaded,
-        None
-    )
+    return chunks, files_loaded, None
 
 
 # =========================================================
-# NÚT CẬP NHẬT TÀI LIỆU
+# NÚT UPDATE THỦ CÔNG
 # =========================================================
 if st.button(
     "🔄 Cập nhật tài liệu từ Google Drive"
@@ -578,7 +445,7 @@ if st.button(
 
 
 # =========================================================
-# NẠP DỮ LIỆU
+# LOAD DATA
 # =========================================================
 with st.spinner(
     "Đang đọc tài liệu..."
@@ -588,13 +455,8 @@ with st.spinner(
     )
 
 
-# =========================================================
-# TRẠNG THÁI
-# =========================================================
 if drive_error:
-    st.error(
-        drive_error
-    )
+    st.error(drive_error)
 
 elif files_loaded:
     st.success(
@@ -623,7 +485,7 @@ with st.expander(
 
 
 # =========================================================
-# UPLOAD HÌNH ẢNH
+# UPLOAD ẢNH
 # =========================================================
 st.divider()
 
@@ -652,7 +514,7 @@ if image_file is not None:
 
 
 # =========================================================
-# CHẤM ĐIỂM MỨC LIÊN QUAN
+# CHẤM ĐIỂM KẾT QUẢ
 # =========================================================
 def score_chunk(
     chunk,
@@ -660,75 +522,73 @@ def score_chunk(
     keywords,
     tags
 ):
-    text_normalized = normalize_text(
+    text_norm = normalize_text(
         chunk["text"]
     )
 
-    question_normalized = normalize_text(
+    question_norm = normalize_text(
         question
     )
 
     score = 0
 
-    # Ưu tiên TAG
+    # TAG exact
     for tag in tags:
         if tag.lower() in chunk["text"].lower():
-            score += 100
+            score += 150
 
-    # Khớp nguyên câu
+    # nguyên câu
     if (
-        question_normalized
-        and question_normalized
-        in text_normalized
+        question_norm
+        and question_norm in text_norm
     ):
         score += 80
 
-    # Khớp từ khóa
-    matched_keywords = 0
+    # từ khóa
+    matched = 0
 
     for keyword in keywords:
-        if keyword in text_normalized:
-            matched_keywords += 1
-            score += 10
+        if keyword in text_norm:
+            matched += 1
+            score += 12
 
-    if matched_keywords >= 2:
-        score += (
-            matched_keywords * 5
-        )
+    if matched >= 2:
+        score += matched * 6
 
-    # Ưu tiên nội dung range/value
-    question_lower = (
-        question_normalized
-    )
-
+    # range/value
     if (
-        "range" in question_lower
-        or "value" in question_lower
-        or "dai do" in question_lower
-        or "gia tri" in question_lower
+        "range" in question_norm
+        or "value" in question_norm
+        or "dai do" in question_norm
+        or "gia tri" in question_norm
     ):
-        if (
-            "range" in text_normalized
-            or "value" in text_normalized
-            or "ma" in text_normalized
-            or "bar" in text_normalized
-            or "mpa" in text_normalized
-            or "kpa" in text_normalized
-            or "mm" in text_normalized
-            or "%" in text_normalized
+        if any(
+            x in text_norm
+            for x in [
+                "range",
+                "value",
+                "ma",
+                "vdc",
+                "bar",
+                "mpa",
+                "kpa",
+                "mm",
+                "°c",
+                "%",
+                "rpm"
+            ]
         ):
-            score += 10
+            score += 15
 
     return score
 
 
 # =========================================================
-# TÌM DỮ LIỆU LIÊN QUAN
+# RETRIEVAL LOCAL
 # =========================================================
-def retrieve_relevant_chunks(
+def retrieve(
     question,
-    chunks,
-    max_results=MAX_RESULTS
+    chunks
 ):
     keywords = get_keywords(
         question
@@ -757,67 +617,57 @@ def retrieve_relevant_chunks(
             )
 
     ranked.sort(
-        key=lambda item: item[0],
+        key=lambda x: x[0],
         reverse=True
     )
 
     selected = []
 
-    for score, chunk in ranked:
-        selected.append(
-            {
-                "score": score,
-                **chunk
-            }
-        )
-
-        if len(selected) >= max_results:
-            break
+    for score, chunk in ranked[:MAX_RESULTS]:
+        selected.append({
+            "score": score,
+            **chunk
+        })
 
     return selected
 
 
 # =========================================================
-# TẠO CONTEXT NHỎ GỬI GEMINI
+# CONTEXT TỐI ƯU
 # =========================================================
 def build_context(results):
     parts = []
-    total_chars = 0
+    total = 0
 
-    for number, result in enumerate(
+    for index, result in enumerate(
         results,
         start=1
     ):
         text = result["text"]
 
         if len(text) > MAX_CHUNK_CHARS:
-            text = text[
-                :MAX_CHUNK_CHARS
-            ]
+            text = text[:MAX_CHUNK_CHARS]
 
         block = f"""
-===== KẾT QUẢ {number} =====
+===== KẾT QUẢ {index} =====
 FILE: {result["file"]}
 VỊ TRÍ: {result["location"]}
 
 {text}
 """
 
-        if (
-            total_chars
-            + len(block)
-            > MAX_CONTEXT_CHARS
-        ):
+        if total + len(block) > MAX_CONTEXT_CHARS:
             break
 
         parts.append(block)
-        total_chars += len(block)
+
+        total += len(block)
 
     return "\n".join(parts)
 
 
 # =========================================================
-# GỌI GEMINI
+# GEMINI
 # =========================================================
 def call_gemini(contents):
     try:
@@ -833,25 +683,22 @@ def call_gemini(contents):
 
         if (
             "429" in error_text
-            or "RESOURCE_EXHAUSTED"
-            in error_text
+            or "RESOURCE_EXHAUSTED" in error_text
         ):
             raise Exception(
                 "Đã chạm giới hạn Gemini miễn phí. "
                 "Hãy chờ khoảng 1 phút rồi hỏi lại."
             )
 
-        elif (
+        if (
             "503" in error_text
             or "UNAVAILABLE" in error_text
         ):
             time.sleep(3)
 
-            response = (
-                client.models.generate_content(
-                    model="gemini-3.8-flash",
-                    contents=contents
-                )
+            response = client.models.generate_content(
+                model="gemini-3.8-flash",
+                contents=contents
             )
 
             return response.text
@@ -860,11 +707,11 @@ def call_gemini(contents):
 
 
 # =========================================================
-# ĐỌC ẢNH ĐỂ LẤY TAG / TỪ KHÓA
+# ĐỌC ẢNH ĐỂ LẤY TAG
 # =========================================================
-def analyze_image_for_search(
+def analyze_image(
     image_file,
-    user_question
+    question
 ):
     image_part = types.Part.from_bytes(
         data=image_file.getvalue(),
@@ -872,31 +719,26 @@ def analyze_image_for_search(
     )
 
     prompt = f"""
-Hãy đọc hình ảnh kỹ thuật này.
+Đọc ảnh kỹ thuật này.
 
-Chỉ thực hiện:
+Chỉ trả về:
+- mã TAG nhìn thấy;
+- tên thiết bị;
+- từ khóa kỹ thuật chính.
 
-1. Đọc mã TAG thiết bị.
-2. Đọc từ khóa kỹ thuật quan trọng.
-3. Đọc tên thiết bị nếu nhìn thấy.
-4. Không giải thích dài dòng.
+Không giải thích dài.
 
 Câu hỏi:
-{user_question}
-
-Trả về một dòng ngắn chứa TAG
-và từ khóa dùng để tìm tài liệu.
+{question}
 """
 
     try:
-        response = (
-            client.models.generate_content(
-                model="gemini-3.8-flash",
-                contents=[
-                    prompt,
-                    image_part
-                ]
-            )
+        response = client.models.generate_content(
+            model="gemini-3.8-flash",
+            contents=[
+                prompt,
+                image_part
+            ]
         )
 
         return response.text
@@ -906,7 +748,7 @@ và từ khóa dùng để tìm tài liệu.
 
 
 # =========================================================
-# LỊCH SỬ CHAT
+# HISTORY
 # =========================================================
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -930,34 +772,27 @@ question = st.chat_input(
 
 
 if question:
-    st.session_state.messages.append(
-        {
-            "role": "user",
-            "content": question
-        }
-    )
+    st.session_state.messages.append({
+        "role": "user",
+        "content": question
+    })
 
     with st.chat_message("user"):
-        st.markdown(
-            question
-        )
+        st.markdown(question)
+
 
     # =====================================================
-    # CÂU TÌM KIẾM
+    # CÂU SEARCH
     # =====================================================
     search_question = question
 
-    # Nếu có ảnh:
-    # Gemini chỉ đọc ảnh để lấy TAG / từ khóa
     if image_file is not None:
         with st.spinner(
             "Đang đọc thông tin trong ảnh..."
         ):
-            image_keywords = (
-                analyze_image_for_search(
-                    image_file,
-                    question
-                )
+            image_keywords = analyze_image(
+                image_file,
+                question
             )
 
         if image_keywords:
@@ -967,13 +802,15 @@ if question:
                 + image_keywords
             )
 
+
     # =====================================================
-    # TÌM LOCAL TRƯỚC
+    # TÌM LOCAL
     # =====================================================
-    results = retrieve_relevant_chunks(
+    results = retrieve(
         search_question,
         chunks
     )
+
 
     # =====================================================
     # KHÔNG TÌM THẤY
@@ -984,19 +821,14 @@ if question:
             "trong tài liệu hiện có."
         )
 
-        with st.chat_message(
-            "assistant"
-        ):
-            st.markdown(
-                answer
-            )
+        with st.chat_message("assistant"):
+            st.markdown(answer)
 
-        st.session_state.messages.append(
-            {
-                "role": "assistant",
-                "content": answer
-            }
-        )
+        st.session_state.messages.append({
+            "role": "assistant",
+            "content": answer
+        })
+
 
     # =====================================================
     # CÓ KẾT QUẢ
@@ -1009,14 +841,14 @@ if question:
         prompt = f"""
 Bạn là CHATBOT TRA CỨU RANGE/VALUE IC PXVH1.
 
-Câu hỏi người dùng:
+CÂU HỎI:
 
 {question}
 
-Dưới đây là các kết quả Python
-đã tìm trước trong tài liệu.
 
-CHỈ sử dụng các kết quả này để trả lời.
+Python đã tìm sẵn các kết quả liên quan dưới đây.
+
+CHỈ dùng dữ liệu này để trả lời.
 
 {context}
 
@@ -1027,17 +859,18 @@ YÊU CẦU:
 2. Trả lời trực tiếp câu hỏi.
 3. Không tự bịa dữ liệu.
 4. Nếu hỏi RANGE/VALUE:
-   nêu chính xác giá trị và đơn vị.
+   nêu rõ giá trị và đơn vị.
 5. Nếu hỏi TAG:
-   chỉ lấy thông tin đúng TAG.
-6. Nếu có nhiều kết quả:
-   liệt kê rõ từng kết quả.
+   chỉ trả lời đúng TAG liên quan.
+6. Nếu nhiều kết quả:
+   liệt kê từng kết quả.
 7. Với Excel:
-   ghi tên file, Sheet và dòng.
+   ghi File, Sheet, dòng.
 8. Với PDF:
-   ghi tên file và Trang.
+   ghi File, Trang.
 9. Không đưa nguồn không liên quan.
-10. Cuối câu trả lời ghi:
+10. Trả lời ngắn gọn, kỹ thuật.
+11. Cuối câu trả lời phải có:
 
 Nguồn:
 - ...
@@ -1070,24 +903,21 @@ Nguồn:
                             prompt
                         )
 
-                    st.markdown(
-                        answer
-                    )
+                    st.markdown(answer)
 
-                    st.session_state.messages.append(
-                        {
-                            "role": "assistant",
-                            "content": answer
-                        }
-                    )
+                    st.session_state.messages.append({
+                        "role": "assistant",
+                        "content": answer
+                    })
 
                 except Exception as e:
                     st.error(
                         str(e)
                     )
 
+
         # =================================================
-        # XEM KẾT QUẢ PYTHON ĐÃ TÌM
+        # XEM KẾT QUẢ LOCAL
         # =================================================
         with st.expander(
             "🔎 Xem các vị trí chatbot đã tìm thấy"
